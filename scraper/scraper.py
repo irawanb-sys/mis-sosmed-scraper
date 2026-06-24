@@ -1,12 +1,15 @@
 """
-Social Media Intelligence Scraper - FIXED
+Social Media Intelligence Scraper - FINAL
+Platforms : YouTube | Twitter | TikTok | Instagram | Web
+Sentiment : Gemini 1.5 Flash
+Storage   : Supabase xsfjocfihkdrdxatugzv
 """
 
 import os, json, time, requests, xml.etree.ElementTree as ET
 from datetime import datetime, date, timedelta
 from urllib.parse import quote
 
-# ── Config HARDCODED ───────────────────────────────────────────
+# ── Config ─────────────────────────────────────────────────────
 SUPABASE_URL    = "https://xsfjocfihkdrdxatugzv.supabase.co"
 SUPABASE_KEY    = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzZmpvY2ZpaGtkcmR4YXR1Z3p2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MTAyNDAxMSwiZXhwIjoyMDk2NjAwMDExfQ.5CYU1UcywW4KXSvPUh183LogP2VShXM2ZxbIMjRgfbo"
 YOUTUBE_API_KEY = "AIzaSyB8EI2111XEWPQjsi3SU3vHdZ5NLGbJUoo"
@@ -27,22 +30,20 @@ print(f"✅ Key prefix: {SUPABASE_KEY[:20]}...")
 # ── Supabase helpers ───────────────────────────────────────────
 
 def sb_get(table, params={}):
-    url = f"{SUPABASE_URL}/rest/v1/{table}"
-    r = requests.get(url, headers=HEADERS_SB, params=params)
+    r = requests.get(f"{SUPABASE_URL}/rest/v1/{table}", headers=HEADERS_SB, params=params)
     r.raise_for_status()
     return r.json()
 
 def sb_insert(table, rows):
     if not rows: return
-    url = f"{SUPABASE_URL}/rest/v1/{table}"
-    r = requests.post(url, headers={**HEADERS_SB, "Prefer": "return=minimal"}, json=rows)
+    r = requests.post(f"{SUPABASE_URL}/rest/v1/{table}",
+        headers={**HEADERS_SB, "Prefer": "return=minimal"}, json=rows)
     r.raise_for_status()
     print(f"  ✅ {len(rows)} rows → {table}")
 
 def sb_upsert(table, rows, on_conflict):
     if not rows: return
-    url = f"{SUPABASE_URL}/rest/v1/{table}"
-    r = requests.post(url,
+    r = requests.post(f"{SUPABASE_URL}/rest/v1/{table}",
         headers={**HEADERS_SB, "Prefer": "resolution=merge-duplicates,return=minimal"},
         params={"on_conflict": on_conflict}, json=rows)
     r.raise_for_status()
@@ -98,7 +99,7 @@ def scrape_youtube(keyword, keyword_id):
         r.raise_for_status()
         items = r.json().get("items", [])
     except Exception as e:
-        print(f"    ⚠️ YouTube error: {e}"); return []
+        print(f"    ⚠️ YouTube: {e}"); return []
 
     mentions = []
     for it in items:
@@ -164,77 +165,100 @@ def scrape_twitter(keyword, keyword_id):
             print(f"    ⚠️ {base}: {e}"); continue
     print("    → semua Nitter instance gagal"); return []
 
-# ── Web / Google News RSS ──────────────────────────────────────
+# ── TikTok / Apify ────────────────────────────────────────────
 
 def scrape_tiktok(keyword, keyword_id):
     if not APIFY_API_KEY:
-        print(f"  ♪ TikTok: skip (APIFY_API_KEY tidak ada)"); return []
+        print(f"  ♪ TikTok: skip"); return []
     print(f"  ♪ TikTok (Apify): '{keyword}'")
     try:
-        run = requests.post("https://api.apify.com/v2/acts/clockworks~tiktok-scraper/runs",
+        run = requests.post(
+            "https://api.apify.com/v2/acts/clockworks~tiktok-scraper/runs",
             params={"token": APIFY_API_KEY},
-            json={"searchQueries":[keyword],"searchSection":"videos","maxItems":15,
-                  "shouldDownloadCovers":False}, timeout=30)
+            json={"searchQueries": [keyword], "searchSection": "videos",
+                  "maxItems": 15, "shouldDownloadCovers": False},
+            timeout=30)
         run.raise_for_status()
         run_id = run.json()["data"]["id"]
+
         for _ in range(12):
             time.sleep(5)
-            st = requests.get(f"https://api.apify.com/v2/actor-runs/{run_id}",
-                    params={"token": APIFY_API_KEY}).json()["data"]
-            if st["status"] == "SUCCEEDED": break
+            st = requests.get(
+                f"https://api.apify.com/v2/actor-runs/{run_id}",
+                params={"token": APIFY_API_KEY}).json()["data"]
+            if st["status"] == "SUCCEEDED":
+                break
+
         dataset_id = st["defaultDatasetId"]
-        items = requests.get(f"https://api.apify.com/v2/datasets/{dataset_id}/items",
+        items = requests.get(
+            f"https://api.apify.com/v2/datasets/{dataset_id}/items",
             params={"token": APIFY_API_KEY, "limit": 15}).json()
+
         mentions = []
         for it in items:
             mentions.append({
                 "keyword_id": keyword_id, "keyword": keyword, "platform": "tiktok",
-                "content": f"{it.get('text','')}".strip()[:800],
-                "author": it.get("authorMeta",{}).get("name"),
+                "content": str(it.get("text", ""))[:800],
+                "author": it.get("authorMeta", {}).get("name"),
                 "url": it.get("webVideoUrl"),
-                "published_at": datetime.fromtimestamp(it.get("createTime",0)).isoformat(),
+                "published_at": datetime.fromtimestamp(it.get("createTime", 0)).isoformat(),
                 "sentiment": "netral", "sentiment_score": 0.0,
-                "likes": int(it.get("diggCount",0)), "comments": int(it.get("commentCount",0)),
-                "views": int(it.get("playCount",0)), "shares": int(it.get("shareCount",0)),
+                "likes":    int(it.get("diggCount", 0)),
+                "comments": int(it.get("commentCount", 0)),
+                "views":    int(it.get("playCount", 0)),
+                "shares":   int(it.get("shareCount", 0)),
             })
         print(f"    → {len(mentions)} video TikTok"); return mentions
     except Exception as e:
         print(f"    ⚠️ TikTok: {e}"); return []
 
+# ── Instagram / Apify ─────────────────────────────────────────
+
 def scrape_instagram(keyword, keyword_id):
     if not APIFY_API_KEY:
-        print(f"  ◉ Instagram: skip (APIFY_API_KEY tidak ada)"); return []
+        print(f"  ◉ Instagram: skip"); return []
     print(f"  ◉ Instagram (Apify): '#{keyword}'")
     try:
-        run = requests.post("https://api.apify.com/v2/acts/apify~instagram-hashtag-scraper/runs",
+        run = requests.post(
+            "https://api.apify.com/v2/acts/apify~instagram-hashtag-scraper/runs",
             params={"token": APIFY_API_KEY},
-            json={"hashtags":[keyword.replace(" ","")],"resultsLimit":15,
-                  "shouldDownloadVideos":False}, timeout=30)
+            json={"hashtags": [keyword.replace(" ", "")],
+                  "resultsLimit": 15, "shouldDownloadVideos": False},
+            timeout=30)
         run.raise_for_status()
         run_id = run.json()["data"]["id"]
+
         for _ in range(12):
             time.sleep(5)
-            st = requests.get(f"https://api.apify.com/v2/actor-runs/{run_id}",
-                    params={"token": APIFY_API_KEY}).json()["data"]
-            if st["status"] == "SUCCEEDED": break
+            st = requests.get(
+                f"https://api.apify.com/v2/actor-runs/{run_id}",
+                params={"token": APIFY_API_KEY}).json()["data"]
+            if st["status"] == "SUCCEEDED":
+                break
+
         dataset_id = st["defaultDatasetId"]
-        items = requests.get(f"https://api.apify.com/v2/datasets/{dataset_id}/items",
+        items = requests.get(
+            f"https://api.apify.com/v2/datasets/{dataset_id}/items",
             params={"token": APIFY_API_KEY, "limit": 15}).json()
+
         mentions = []
         for it in items:
             mentions.append({
                 "keyword_id": keyword_id, "keyword": keyword, "platform": "instagram",
                 "content": (it.get("caption") or "")[:800],
-                "author": it.get("ownerUsername"), "url": it.get("url"),
+                "author": it.get("ownerUsername"),
+                "url": it.get("url"),
                 "published_at": it.get("timestamp"),
                 "sentiment": "netral", "sentiment_score": 0.0,
-                "likes": int(it.get("likesCount",0)),
-                "comments": int(it.get("commentsCount",0)),
-                "views": int(it.get("videoViewCount",0)),
+                "likes":    int(it.get("likesCount", 0)),
+                "comments": int(it.get("commentsCount", 0)),
+                "views":    int(it.get("videoViewCount", 0)),
             })
         print(f"    → {len(mentions)} post Instagram"); return mentions
     except Exception as e:
         print(f"    ⚠️ Instagram: {e}"); return []
+
+# ── Web / Google News RSS ──────────────────────────────────────
 
 def scrape_web(keyword, keyword_id):
     print(f"  🌐 Google News: '{keyword}'")
