@@ -24,13 +24,13 @@ from datetime import datetime, date, timedelta
 
 # ── Config dari ENVIRONMENT VARIABLE (jangan hardcode!) ────────
 SUPABASE_URL    = os.environ.get("SUPABASE_URL", "")
-SUPABASE_KEY    = os.environ.get("SUPABASE_SERVICE_KEY", "")   # service_role key -> WAJIB rahasia
+SUPABASE_KEY    = os.environ.get("SUPABASE_KEY", "")   # service_role key -> WAJIB rahasia
 YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY", "")
 GEMINI_API_KEY  = os.environ.get("GEMINI_API_KEY", "")
 APIFY_API_KEY   = os.environ.get("APIFY_API_KEY", "")
 
 missing = [k for k, v in {
-    "SUPABASE_URL": SUPABASE_URL, "SUPABASE_SERVICE_KEY": SUPABASE_KEY,
+    "SUPABASE_URL": SUPABASE_URL, "SUPABASE_KEY": SUPABASE_KEY,
     "YOUTUBE_API_KEY": YOUTUBE_API_KEY, "GEMINI_API_KEY": GEMINI_API_KEY,
     "APIFY_API_KEY": APIFY_API_KEY,
 }.items() if not v]
