@@ -75,7 +75,9 @@ def analyze_sentiment_batch(texts):
     if not GEMINI_API_KEY or not texts:
         return [{"label": "netral", "score": 0.0}] * len(texts)
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    # FIX: gemini-1.5-flash sudah di-shutdown total oleh Google (semua request balik 404).
+    # gemini-3.1-flash-lite: murah, cepat, belum ada tanggal retirement yang diumumkan.
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key={GEMINI_API_KEY}"
     results = []
 
     for i in range(0, len(texts), 10):
