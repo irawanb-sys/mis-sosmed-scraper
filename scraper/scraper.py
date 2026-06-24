@@ -57,6 +57,8 @@ def sb_insert(table, rows):
     if not rows: return
     url = f"{SUPABASE_URL}/rest/v1/{table}"
     r = requests.post(url, headers={**HEADERS_SB, "Prefer": "return=minimal"}, json=rows)
+    if not r.ok:
+        print(f"  ⚠️ Supabase insert error [{r.status_code}] → {table}: {r.text[:500]}")
     r.raise_for_status()
     print(f"  ✅ {len(rows)} rows → {table}")
 
@@ -66,6 +68,8 @@ def sb_upsert(table, rows, on_conflict):
     r = requests.post(url,
         headers={**HEADERS_SB, "Prefer": "resolution=merge-duplicates,return=minimal"},
         params={"on_conflict": on_conflict}, json=rows)
+    if not r.ok:
+        print(f"  ⚠️ Supabase upsert error [{r.status_code}] → {table}: {r.text[:500]}")
     r.raise_for_status()
     print(f"  ✅ upsert {len(rows)} rows → {table}")
 
@@ -260,7 +264,12 @@ def scrape_tiktok(keyword, keyword_id):
             "likes": int(it.get("diggCount", 0) or 0),
             "comments": int(it.get("commentCount", 0) or 0),
             "views": int(it.get("playCount", 0) or 0),
-            "shares": int(it.get("shareCount", 0) or 0),
+            # "shares" dihapus sementara - kemungkinan kolom ini tidak ada di tabel
+            # sm_mentions, dan menyebabkan 400 Bad Request saat insert. Kalau mau
+            # menyimpan data share count, tambah kolom dulu:
+            #   ALTER TABLE sm_mentions ADD COLUMN shares integer DEFAULT 0;
+            # lalu kembalikan baris berikut:
+            # "shares": int(it.get("shareCount", 0) or 0),
         })
     print(f"    → {len(mentions)} video TikTok"); return mentions
 
